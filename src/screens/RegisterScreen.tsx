@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View, ViewStyle } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
@@ -8,6 +8,7 @@ import { useThemeColors } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import Button from '../components/Button';
 import SelectField from '../components/SelectField';
+import ParkSelectModal, { ParkSelection } from '../components/ParkSelectModal';
 import { useAuth } from '../context/AuthContext';
 import PasswordStrengthChecklist, { PasswordMatchIndicator } from '../components/PasswordStrengthChecklist';
 import { SELANGOR_CITIES, SELANGOR_DISTRICTS, SelangorDistrict } from '../data/selangorLocations';
@@ -20,13 +21,17 @@ export default function RegisterScreen({ navigation }: Props) {
   const colors = useThemeColors();
   const { t } = useLanguage();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { register, getParkNames } = useAuth();
+  const { register, checkHousehold } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [existingParks, setExistingParks] = useState<string[]>([]);
-  const [parkSelection, setParkSelection] = useState('');
-  const [parkName, setParkName] = useState('');
+  const [parkPickerVisible, setParkPickerVisible] = useState(false);
+  const [selectedPark, setSelectedPark] = useState<ParkSelection | null>(null);
+  const [houseNo, setHouseNo] = useState('');
+  const [houseCheck, setHouseCheck] = useState<{
+    status: 'idle' | 'checking' | 'available' | 'taken';
+    ownerName?: string;
+  }>({ status: 'idle' });
   const [address, setAddress] = useState('');
   const [postcode, setPostcode] = useState('');
   const [state, setState] = useState('Selangor');
@@ -38,13 +43,33 @@ export default function RegisterScreen({ navigation }: Props) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Live "is this house already registered" check, debounced so it doesn't
+  // fire on every keystroke. Only meaningful once an existing park is
+  // picked — a brand-new park can't have any households yet.
+  const houseCheckRef = useRef(0);
   useEffect(() => {
-    getParkNames().then(setExistingParks).catch(() => {});
-  }, []);
+    if (!selectedPark || !('id' in selectedPark) || !houseNo.trim()) {
+      setHouseCheck({ status: 'idle' });
+      return;
+    }
+    const parkId = selectedPark.id;
+    const thisCheck = ++houseCheckRef.current;
+    setHouseCheck({ status: 'checking' });
+    const timer = setTimeout(() => {
+      checkHousehold(parkId, houseNo)
+        .then((household) => {
+          if (houseCheckRef.current !== thisCheck) return;
+          setHouseCheck(household ? { status: 'taken', ownerName: household.ownerName } : { status: 'available' });
+        })
+        .catch(() => {
+          if (houseCheckRef.current === thisCheck) setHouseCheck({ status: 'idle' });
+        });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [selectedPark, houseNo]);
 
-  const OTHER_PARK_OPTION = t('register.parkOtherOption');
-  const parkOptions = [...existingParks, OTHER_PARK_OPTION];
-  const isNewPark = parkSelection === OTHER_PARK_OPTION;
+  const parkDisplayName = selectedPark ? ('id' in selectedPark ? selectedPark.name : selectedPark.newName) : '';
+  const isNewPark = !!selectedPark && !('id' in selectedPark);
 
   const handleRegister = async () => {
     setError('');
@@ -52,7 +77,8 @@ export default function RegisterScreen({ navigation }: Props) {
       !name.trim() ||
       !email.trim() ||
       !phone.trim() ||
-      !parkName.trim() ||
+      !selectedPark ||
+      !houseNo.trim() ||
       !address.trim() ||
       !postcode.trim() ||
       !state ||
@@ -61,6 +87,10 @@ export default function RegisterScreen({ navigation }: Props) {
       !password
     ) {
       setError(t('common.required'));
+      return;
+    }
+    if (houseCheck.status === 'taken') {
+      setError(t('register.houseTaken', { owner: houseCheck.ownerName ?? '' }));
       return;
     }
     if (password.length < 6) {
@@ -80,7 +110,8 @@ export default function RegisterScreen({ navigation }: Props) {
       name,
       email,
       phone,
-      parkName: parkName.trim(),
+      park: selectedPark,
+      houseNo,
       address,
       postcode,
       state,
@@ -90,7 +121,11 @@ export default function RegisterScreen({ navigation }: Props) {
     });
     setLoading(false);
     if (!result.success) {
-      setError(t(result.messageKey ?? 'register.failed'));
+      setError(
+        result.messageKey === 'register.houseTaken'
+          ? t('register.houseTaken', { owner: result.ownerName ?? '' })
+          : t(result.messageKey ?? 'register.failed')
+      );
     }
   };
 
@@ -114,27 +149,64 @@ export default function RegisterScreen({ navigation }: Props) {
             <Field label={t('register.fullName')} icon="person-outline" value={name} onChangeText={setName} placeholder={t('register.fullNamePlaceholder')} />
             <Field label={t('common.email')} icon="mail-outline" value={email} onChangeText={setEmail} placeholder={t('register.emailPlaceholder')} keyboardType="email-address" autoCapitalize="none" />
             <Field label={t('common.phone')} icon="call-outline" value={phone} onChangeText={setPhone} placeholder={t('register.phonePlaceholder')} keyboardType="phone-pad" />
-            <SelectField
-              label={t('register.parkName')}
-              icon="business-outline"
-              value={parkSelection}
-              options={parkOptions}
-              placeholder={t('register.parkNamePlaceholder')}
-              onSelect={(value) => {
-                setParkSelection(value);
-                setParkName(value === OTHER_PARK_OPTION ? '' : value);
-              }}
-            />
+            <AppText style={styles.fieldLabel}>{t('register.parkName')}</AppText>
+            <TouchableOpacity
+              style={styles.inputWrap}
+              activeOpacity={0.75}
+              onPress={() => setParkPickerVisible(true)}
+            >
+              <View style={styles.inputIconWrap}>
+                <Ionicons name="business-outline" size={15} color={colors.primary} />
+              </View>
+              <AppText style={[styles.input, !parkDisplayName && styles.pickerPlaceholder]} numberOfLines={1}>
+                {parkDisplayName || t('register.parkNamePlaceholder')}
+              </AppText>
+              <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
             {isNewPark && (
-              <Field
-                label={t('register.newParkName')}
-                icon="add-circle-outline"
-                value={parkName}
-                onChangeText={setParkName}
-                placeholder={t('register.parkNamePlaceholder')}
-              />
+              <View style={styles.newParkBadge}>
+                <Ionicons name="add-circle" size={13} color={colors.primary} />
+                <AppText style={styles.newParkBadgeText}>{t('register.parkNewBadge')}</AppText>
+              </View>
             )}
             <AppText style={styles.parkHint}>{t('register.parkHint')}</AppText>
+
+            <AppText style={styles.fieldLabel}>{t('register.houseNo')}</AppText>
+            <View style={styles.inputWrap}>
+              <View style={styles.inputIconWrap}>
+                <Ionicons name="home-outline" size={15} color={colors.primary} />
+              </View>
+              <TextInput
+                value={houseNo}
+                onChangeText={setHouseNo}
+                placeholder={t('register.houseNoPlaceholder')}
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="characters"
+                editable={!!selectedPark}
+                style={styles.input}
+              />
+            </View>
+            {houseCheck.status === 'checking' && (
+              <View style={styles.houseStatusRow}>
+                <ActivityIndicator size="small" color={colors.textMuted} />
+                <AppText style={styles.houseStatusMuted}>{t('register.houseChecking')}</AppText>
+              </View>
+            )}
+            {houseCheck.status === 'available' && (
+              <View style={styles.houseStatusRow}>
+                <Ionicons name="checkmark-circle" size={15} color={colors.primary} />
+                <AppText style={styles.houseStatusOk}>{t('register.houseAvailable')}</AppText>
+              </View>
+            )}
+            {houseCheck.status === 'taken' && (
+              <View style={styles.houseStatusRow}>
+                <Ionicons name="alert-circle" size={15} color={colors.danger} />
+                <AppText style={styles.houseStatusTaken}>
+                  {t('register.houseTaken', { owner: houseCheck.ownerName ?? '' })}
+                </AppText>
+              </View>
+            )}
+
             <Field
               label={t('common.address')}
               icon="home-outline"
@@ -213,6 +285,15 @@ export default function RegisterScreen({ navigation }: Props) {
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
+
+      <ParkSelectModal
+        visible={parkPickerVisible}
+        onClose={() => setParkPickerVisible(false)}
+        onSelect={(park) => {
+          setSelectedPark(park);
+          setParkPickerVisible(false);
+        }}
+      />
     </View>
   );
 }
@@ -345,6 +426,42 @@ const makeStyles = (colors: ColorPalette) =>
       fontSize: 11,
       color: colors.textMuted,
       marginTop: 4,
+      lineHeight: 15,
+    },
+    pickerPlaceholder: {
+      color: colors.textMuted,
+    },
+    newParkBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginTop: spacing.xs,
+    },
+    newParkBadgeText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    houseStatusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginTop: spacing.xs,
+    },
+    houseStatusMuted: {
+      fontSize: 11.5,
+      color: colors.textMuted,
+    },
+    houseStatusOk: {
+      fontSize: 11.5,
+      color: colors.primary,
+      fontWeight: '600',
+    },
+    houseStatusTaken: {
+      flex: 1,
+      fontSize: 11.5,
+      color: colors.danger,
+      fontWeight: '600',
       lineHeight: 15,
     },
     fieldLabel: {

@@ -27,6 +27,24 @@ service cloud.firestore {
         && myProfile().parkName == parkName;
     }
 
+    function isChairmanOfPark(parkName) {
+      return isSignedIn()
+        && myProfile().role == 'chairman'
+        && myProfile().parkName == parkName;
+    }
+
+    // A chairman can hand out committee roles (ajk/treasurer/resident) to
+    // members who don't already hold admin/chairman, but can't touch the
+    // admin or chairman assignment itself — only the admin can appoint a
+    // chairman or another admin — and can't change anything on the profile
+    // besides the role field.
+    function isChairmanRoleHandoff() {
+      return isChairmanOfPark(resource.data.parkName)
+        && resource.data.role in ['resident', 'ajk', 'treasurer']
+        && request.resource.data.role in ['resident', 'ajk', 'treasurer']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role']);
+    }
+
     // One document per account, keyed by Firebase Auth uid.
     match /users/{userId} {
       allow read: if isSignedIn();
@@ -34,7 +52,14 @@ service cloud.firestore {
         && request.auth.uid == userId
         && request.resource.data.email == request.auth.token.email;
       allow update: if isSignedIn()
-        && (request.auth.uid == userId || isAdminOfPark(resource.data.parkName));
+        && (
+          // Residents can freely edit their own profile, but never their
+          // own role field — role changes must go through an admin or the
+          // chairman hand-off below, never self-service.
+          (request.auth.uid == userId && request.resource.data.role == resource.data.role)
+          || isAdminOfPark(resource.data.parkName)
+          || isChairmanRoleHandoff()
+        );
       allow delete: if isSignedIn() && request.auth.uid == userId;
     }
 
@@ -71,13 +96,28 @@ service cloud.firestore {
       allow write: if isTreasuryOfPark(request.resource.data.parkName);
     }
 
-    // Public directory of registered park names (doc id = encodeURIComponent(parkName)),
-    // holding only the name itself. Read publicly so the Register screen can offer
-    // existing parks in a dropdown before the visitor has an account; writes require
-    // auth since a park is only added once someone actually registers into it.
+    // Public directory of registered parks (doc id = encodeURIComponent(parkName)),
+    // holding the name plus a lowercased copy for prefix search and its
+    // state/district/city. Read publicly so the Register screen's park
+    // search works before the visitor has an account; writes require auth
+    // since a park is only added once someone actually registers into it.
     match /parks/{parkId} {
       allow read: if true;
       allow write: if isSignedIn();
+    }
+
+    // One doc per physical house (doc id = `${parkId}_${normalizedHouseNo}`),
+    // holding just enough to say "this house is already registered" and who
+    // owns it. Read publicly for the same pre-account reason as parks above
+    // (Register needs to show "already registered, contact <owner>" before
+    // the visitor exists as a user). A household can only ever be created by
+    // the person claiming ownership of it (email must match their own
+    // account), and never reassigned or deleted from the client — moving a
+    // resident to a different house is a future admin-mediated flow.
+    match /households/{householdId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.ownerEmail == request.auth.token.email;
+      allow update, delete: if false;
     }
   }
 }

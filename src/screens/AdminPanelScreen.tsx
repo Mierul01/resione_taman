@@ -14,7 +14,8 @@ import AppText from '../components/AppText';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AdminPanel'>;
 
-const ROLE_OPTIONS: Role[] = ['resident', 'ajk', 'treasurer', 'chairman', 'admin'];
+const ADMIN_ROLE_OPTIONS: Role[] = ['resident', 'ajk', 'treasurer', 'chairman', 'admin'];
+const CHAIRMAN_ROLE_OPTIONS: Role[] = ['resident', 'ajk', 'treasurer'];
 
 export default function AdminPanelScreen({ navigation }: Props) {
   const colors = useThemeColors();
@@ -26,6 +27,11 @@ export default function AdminPanelScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<User | null>(null);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const isAdmin = user?.role === 'admin';
+  const roleOptions = isAdmin ? ADMIN_ROLE_OPTIONS : CHAIRMAN_ROLE_OPTIONS;
+  const canEditSelected = isAdmin || (!!selected && ['resident', 'ajk', 'treasurer'].includes(selected.role));
 
   const loadResidents = async () => {
     if (!user) return;
@@ -42,8 +48,13 @@ export default function AdminPanelScreen({ navigation }: Props) {
   const handleAssign = async (role: Role) => {
     if (!selected) return;
     setSaving(true);
-    await setUserRole(selected.email, role);
+    setError('');
+    const result = await setUserRole(selected.email, role);
     setSaving(false);
+    if (!result.success) {
+      setError(t(result.messageKey ?? 'adminPanel.lastAdminError'));
+      return;
+    }
     setSelected(null);
     loadResidents();
   };
@@ -62,7 +73,14 @@ export default function AdminPanelScreen({ navigation }: Props) {
         onRefresh={loadResidents}
         contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }}
         renderItem={({ item }) => (
-          <TouchableOpacity style={styles.card} activeOpacity={0.8} onPress={() => setSelected(item)}>
+          <TouchableOpacity
+            style={styles.card}
+            activeOpacity={0.8}
+            onPress={() => {
+              setSelected(item);
+              setError('');
+            }}
+          >
             <View style={styles.avatar}>
               <Ionicons name="person" size={18} color={colors.primary} />
             </View>
@@ -85,24 +103,45 @@ export default function AdminPanelScreen({ navigation }: Props) {
         }
       />
 
-      <AppModal visible={!!selected} onClose={() => setSelected(null)}>
+      <AppModal
+        visible={!!selected}
+        onClose={() => {
+          setSelected(null);
+          setError('');
+        }}
+      >
         <AppText style={typography.h3}>{selected?.name}</AppText>
-        <AppText style={[typography.caption, { marginTop: spacing.xs }]}>{t('adminPanel.pickRole')}</AppText>
-        <View style={styles.chipRow}>
-          {ROLE_OPTIONS.map((role) => (
-            <TouchableOpacity
-              key={role}
-              style={[styles.chip, selected?.role === role && styles.chipActive]}
-              onPress={() => handleAssign(role)}
-              disabled={saving}
-            >
-              <AppText style={[styles.chipText, selected?.role === role && styles.chipTextActive]}>
-                {t(`role.${role}`)}
-              </AppText>
-            </TouchableOpacity>
-          ))}
-        </View>
-        <Button label={t('common.close')} variant="ghost" onPress={() => setSelected(null)} style={{ marginTop: spacing.lg }} />
+        {canEditSelected ? (
+          <>
+            <AppText style={[typography.caption, { marginTop: spacing.xs }]}>{t('adminPanel.pickRole')}</AppText>
+            <View style={styles.chipRow}>
+              {roleOptions.map((role) => (
+                <TouchableOpacity
+                  key={role}
+                  style={[styles.chip, selected?.role === role && styles.chipActive]}
+                  onPress={() => handleAssign(role)}
+                  disabled={saving}
+                >
+                  <AppText style={[styles.chipText, selected?.role === role && styles.chipTextActive]}>
+                    {t(`role.${role}`)}
+                  </AppText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        ) : (
+          <AppText style={[typography.caption, { marginTop: spacing.xs }]}>{t('adminPanel.lockedNotice')}</AppText>
+        )}
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
+        <Button
+          label={t('common.close')}
+          variant="ghost"
+          onPress={() => {
+            setSelected(null);
+            setError('');
+          }}
+          style={{ marginTop: spacing.lg }}
+        />
       </AppModal>
     </View>
   );
@@ -168,5 +207,10 @@ const makeStyles = (colors: ColorPalette) =>
     },
     chipTextActive: {
       color: colors.white,
+    },
+    error: {
+      color: colors.danger,
+      fontSize: 12,
+      marginTop: spacing.md,
     },
   });

@@ -106,7 +106,7 @@ export default function ProfileScreen() {
       onPress: () => navigation.navigate('Settings'),
       highlight: false,
     },
-    ...(user?.role === 'admin'
+    ...(user?.role === 'admin' || user?.role === 'chairman'
       ? [
           {
             key: 'admin',

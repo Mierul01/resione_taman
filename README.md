@@ -6,6 +6,17 @@ The app is **multi-tenant**: anyone can register a new "park" (residential commu
 
 ---
 
+## Install
+
+| Android (APK) | iPhone / iPad (web app) |
+|:---:|:---:|
+| <img src="docs/qr/android-apk.png" width="200" alt="QR code to download the Android APK"> | <img src="docs/qr/ios-web.png" width="200" alt="QR code to open the ResiOne web app"> |
+| [Download `neighbourly.apk`](https://github.com/Mierul01/resione_taman/releases/latest/download/neighbourly.apk) | [resione-taman.quizcarnival.workers.dev](https://resione-taman.quizcarnival.workers.dev) |
+
+Both QR codes are permanent. The Android one always downloads the newest release's APK, and the iPhone one opens the web app, which Cloudflare rebuilds from `master` on every push. On iPhone, open the link in Safari, tap **Share → Add to Home Screen**, and ResiOne opens full screen like an installed app.
+
+---
+
 ## Features
 
 ### For residents
@@ -123,6 +134,10 @@ To ship an update:
 1. Bump `"version"` in `app.json`
 2. Build a new release APK (`gradlew assembleRelease`)
 3. Publish a new GitHub Release tagged to match (e.g. `v1.0.1`), with the asset named exactly `neighbourly.apk`
+
+Keeping the asset name the same is what keeps the Android QR code valid forever: it points at `releases/latest/download/neighbourly.apk`, which GitHub always resolves to the newest release.
+
+The iPhone web app is hosted on **Cloudflare Workers** (`resione-taman.quizcarnival.workers.dev`), connected to this repo with build command `npx expo export --platform web` and output directory `dist`. Every push to `master` redeploys it at the same address, so its QR code never changes either.
 
 ---
 

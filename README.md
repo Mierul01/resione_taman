@@ -117,7 +117,7 @@ cd android
 
 ## Distributing updates
 
-Releases are published as GitHub Releases with the built `neighbourly.apk` attached. The **in-app update banner** checks `github.com/Mierul01/Taman_app/releases/latest`, so once someone has the app installed, publishing a new release is enough — no need to share a new QR code or link each time.
+Releases are published as GitHub Releases with the built `neighbourly.apk` attached. The **in-app update banner** checks `github.com/Mierul01/resione_taman/releases/latest`, so once someone has the app installed, publishing a new release is enough — no need to share a new QR code or link each time.
 
 To ship an update:
 1. Bump `"version"` in `app.json`

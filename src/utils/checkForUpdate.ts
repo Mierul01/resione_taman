@@ -1,6 +1,6 @@
 import * as Application from 'expo-application';
 
-const REPO = 'Mierul01/Taman_app';
+const REPO = 'Mierul01/resione_taman';
 const ASSET_NAME = 'neighbourly.apk';
 
 export type UpdateInfo = {

@@ -3,8 +3,9 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleShe
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
-import { radius, shadow, spacing, withAlpha, ColorPalette } from '../theme/theme';
-import { useThemeColors } from '../context/ThemeContext';
+import { heroGradientDark, heroGradientLight, radius, shadow, spacing, withAlpha, ColorPalette } from '../theme/theme';
+import { useAppTheme, useThemeColors } from '../context/ThemeContext';
+import GradientBackground from '../components/GradientBackground';
 import { useLanguage } from '../context/LanguageContext';
 import Button from '../components/Button';
 import SelectField from '../components/SelectField';
@@ -19,6 +20,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 
 export default function RegisterScreen({ navigation }: Props) {
   const colors = useThemeColors();
+  const { isDarkMode } = useAppTheme();
   const { t } = useLanguage();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { register, checkHousehold } = useAuth();
@@ -131,6 +133,9 @@ export default function RegisterScreen({ navigation }: Props) {
 
   return (
     <View style={styles.backdrop}>
+      <GradientBackground colors={isDarkMode ? heroGradientDark : heroGradientLight} />
+      <View style={styles.glowLarge} />
+      <View style={styles.glowSmall} />
       <Ionicons name="leaf" size={160} color="rgba(255,255,255,0.06)" style={styles.backdropWatermarkTop} />
 
       <View style={styles.logoCircle}>
@@ -351,6 +356,24 @@ function Field({
 
 const makeStyles = (colors: ColorPalette) =>
   StyleSheet.create({
+    glowLarge: {
+      position: 'absolute',
+      width: 320,
+      height: 320,
+      borderRadius: 160,
+      right: -110,
+      top: -90,
+      backgroundColor: 'rgba(255,255,255,0.09)',
+    },
+    glowSmall: {
+      position: 'absolute',
+      width: 200,
+      height: 200,
+      borderRadius: 100,
+      left: -80,
+      bottom: 60,
+      backgroundColor: 'rgba(242,169,59,0.10)',
+    },
     backdrop: {
       flex: 1,
       backgroundColor: colors.primary,
@@ -388,7 +411,7 @@ const makeStyles = (colors: ColorPalette) =>
       borderRadius: radius.lg * 1.7,
       marginHorizontal: spacing.md,
       marginBottom: spacing.lg,
-      ...shadow.card,
+      ...shadow.hero,
       overflow: 'hidden',
     },
     cardHandle: {

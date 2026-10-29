@@ -124,7 +124,7 @@ const makeStyles = (colors: ColorPalette, windowWidth: number) =>
   StyleSheet.create({
     slide: {
       width: windowWidth - SIDE_MARGIN * 2,
-      height: 190,
+      height: 160,
       borderRadius: radius.lg,
       padding: spacing.md,
       overflow: 'hidden',

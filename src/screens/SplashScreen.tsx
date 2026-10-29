@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ColorPalette } from '../theme/theme';
-import { useThemeColors } from '../context/ThemeContext';
+import { heroGradientDark, heroGradientLight, ColorPalette } from '../theme/theme';
+import { useAppTheme, useThemeColors } from '../context/ThemeContext';
+import GradientBackground from '../components/GradientBackground';
 import { useLanguage } from '../context/LanguageContext';
 
 type Props = {
@@ -11,6 +12,7 @@ type Props = {
 
 export default function SplashScreen({ onFinish }: Props) {
   const colors = useThemeColors();
+  const { isDarkMode } = useAppTheme();
   const { t } = useLanguage();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const scale = useRef(new Animated.Value(0.8)).current;
@@ -28,6 +30,9 @@ export default function SplashScreen({ onFinish }: Props) {
 
   return (
     <View style={styles.container}>
+      <GradientBackground colors={isDarkMode ? heroGradientDark : heroGradientLight} />
+      <View style={styles.glowLarge} />
+      <View style={styles.glowSmall} />
       <Animated.View style={[styles.logoCircle, { transform: [{ scale }], opacity }]}>
         <Ionicons name="leaf" size={56} color={colors.white} />
       </Animated.View>
@@ -39,6 +44,24 @@ export default function SplashScreen({ onFinish }: Props) {
 
 const makeStyles = (colors: ColorPalette) =>
   StyleSheet.create({
+    glowLarge: {
+      position: 'absolute',
+      width: 320,
+      height: 320,
+      borderRadius: 160,
+      right: -110,
+      top: -90,
+      backgroundColor: 'rgba(255,255,255,0.09)',
+    },
+    glowSmall: {
+      position: 'absolute',
+      width: 200,
+      height: 200,
+      borderRadius: 100,
+      left: -80,
+      bottom: 60,
+      backgroundColor: 'rgba(242,169,59,0.10)',
+    },
     container: {
       flex: 1,
       backgroundColor: colors.primary,

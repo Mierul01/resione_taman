@@ -6,8 +6,8 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { MainTabParamList } from '../navigation/types';
-import { radius, shadow, spacing, withAlpha, ColorPalette } from '../theme/theme';
-import { useThemeColors, useThemeTypography } from '../context/ThemeContext';
+import { heroGradientDark, heroGradientLight, radius, shadow, spacing, withAlpha, ColorPalette } from '../theme/theme';
+import { useAppTheme, useThemeColors, useThemeTypography } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth, User } from '../context/AuthContext';
 import { usePayments } from '../context/PaymentContext';
@@ -19,17 +19,18 @@ import {
   emergencyContacts,
   notifications,
   formatNotificationDate,
+  totalHouseholds,
 } from '../data/mockData';
 import { getAllPrograms } from '../data/programsStore';
 import HighlightCarousel from '../components/HighlightCarousel';
+import GradientBackground from '../components/GradientBackground';
 import AppText from '../components/AppText';
-import Button from '../components/Button';
 import { toTitleCase } from '../utils/formatName';
 
 type Props = BottomTabScreenProps<MainTabParamList, 'Dashboard'>;
 
-const FEE_RING_SIZE = 56;
-const FEE_RING_STROKE = 5;
+const FEE_RING_SIZE = 78;
+const FEE_RING_STROKE = 8;
 const FEE_RING_RADIUS = (FEE_RING_SIZE - FEE_RING_STROKE) / 2;
 const FEE_RING_CIRCUMFERENCE = 2 * Math.PI * FEE_RING_RADIUS;
 const EXPLORE_CATEGORIES: Program['category'][] = ['Sukan', 'Gotong-Royong', 'Perayaan', 'Kursus'];
@@ -45,6 +46,7 @@ const CATEGORY_FALLBACK_IMAGES: Record<Program['category'], string> = {
 
 export default function DashboardScreen({ navigation }: Props) {
   const colors = useThemeColors();
+  const { isDarkMode } = useAppTheme();
   const typography = useThemeTypography();
   const { t, language } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -60,9 +62,11 @@ export default function DashboardScreen({ navigation }: Props) {
   const [residentCount, setResidentCount] = useState<number | null>(null);
   const [committeePreview, setCommitteePreview] = useState<User[]>([]);
   const emergencyPreview = emergencyContacts.slice(0, 2);
-  const recentNotifications = notifications.slice(0, 2);
+  const unreadNotifications = notifications.filter((n) => n.unread);
+  const latestNotification = unreadNotifications[0] ?? notifications[0];
   const notifLocale = language === 'ms' ? 'ms-MY' : 'en-GB';
   const isDependent = !!user?.dependentOf;
+  const canViewCollections = user ? user.role !== 'resident' : false;
 
   useFocusEffect(
     useCallback(() => {
@@ -130,10 +134,58 @@ export default function DashboardScreen({ navigation }: Props) {
     [upcoming]
   );
 
+  const quickActions: { key: string; icon: keyof typeof Ionicons.glyphMap; label: string; route: keyof MainTabParamList }[] = [
+    { key: 'pay', icon: 'card', label: t('dashboard.tabPayments'), route: 'Payments' },
+    { key: 'programs', icon: 'calendar', label: t('dashboard.tabPrograms'), route: 'Programs' },
+    { key: 'charity', icon: 'heart', label: t('dashboard.tabCharity'), route: 'Charity' },
+    { key: 'committee', icon: 'people', label: t('dashboard.tabCommittee'), route: 'Committee' },
+    canViewCollections
+      ? { key: 'reports', icon: 'stats-chart', label: t('dashboard.tabCollections'), route: 'Collections' }
+      : { key: 'profile', icon: 'person', label: t('dashboard.tabProfile'), route: 'Profile' },
+  ];
+
+  const stats = [
+    {
+      key: 'residents',
+      icon: 'people' as const,
+      color: '#2E6FD9',
+      value: residentCount ?? '—',
+      label: t('dashboard.statResidents'),
+      pct: residentCount ? Math.min(100, (residentCount / totalHouseholds) * 100) : 0,
+      onPress: () => navigation.navigate('Committee'),
+    },
+    {
+      key: 'programs',
+      icon: 'calendar' as const,
+      color: '#1B7A43',
+      value: upcoming.length,
+      label: t('dashboard.statPrograms'),
+      pct: Math.min(100, (upcoming.length / 5) * 100),
+      onPress: () => navigation.navigate('Programs'),
+    },
+    {
+      key: 'family',
+      icon: 'home' as const,
+      color: '#D9862E',
+      value: (user?.familyMembers?.length ?? 0) + 1,
+      label: t('dashboard.statFamily'),
+      pct: Math.min(100, (((user?.familyMembers?.length ?? 0) + 1) / 6) * 100),
+      onPress: () => navigation.navigate('Profile'),
+    },
+  ];
+
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ paddingBottom: spacing.xl }}>
-      <View style={styles.headerBlock}>
-        <Ionicons name="leaf" size={130} color="rgba(255,255,255,0.08)" style={styles.headerWatermark} />
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      contentContainerStyle={{ paddingBottom: spacing.xl }}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.hero}>
+        <GradientBackground colors={isDarkMode ? heroGradientDark : heroGradientLight} />
+        <View style={styles.glowLarge} />
+        <View style={styles.glowSmall} />
+        <Ionicons name="leaf" size={150} color="rgba(255,255,255,0.07)" style={styles.heroWatermark} />
+
         <View style={[styles.topBar, { paddingTop: insets.top + spacing.md }]}>
           <View style={styles.topBarBrand}>
             <View style={styles.topBarLogo}>
@@ -143,311 +195,310 @@ export default function DashboardScreen({ navigation }: Props) {
           </View>
           <View style={styles.topBarActions}>
             <TouchableOpacity
-              style={styles.iconButton}
+              style={styles.glassIconButton}
               activeOpacity={0.8}
               onPress={() => (navigation as any).navigate('Notifications')}
             >
-              <Ionicons name="notifications-outline" size={19} color={colors.text} />
-              <View style={styles.notificationDot} />
+              <Ionicons name="notifications-outline" size={19} color={colors.white} />
+              {unreadNotifications.length > 0 && <View style={styles.notificationDot} />}
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.iconButton}
+              style={styles.glassIconButton}
               activeOpacity={0.8}
               onPress={() => (navigation as any).navigate('Settings')}
             >
-              <Ionicons name="settings-outline" size={19} color={colors.text} />
+              <Ionicons name="settings-outline" size={19} color={colors.white} />
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.header}>
-          <View style={styles.headerTextWrap}>
+        <View style={styles.greetingRow}>
+          <View style={styles.greetingTextWrap}>
             <AppText style={styles.greetingCaption}>{t('dashboard.welcome')}</AppText>
             <AppText style={styles.greetingName} numberOfLines={1} ellipsizeMode="tail">
               {user?.name ? toTitleCase(user.name) : t('role.resident')}
             </AppText>
-            <AppText style={styles.greetingSubtitle} numberOfLines={1}>
-              {user?.parkName}
-            </AppText>
+            <View style={styles.parkRow}>
+              <Ionicons name="location" size={12} color="rgba(255,255,255,0.85)" />
+              <AppText style={styles.greetingSubtitle} numberOfLines={1}>
+                {user?.parkName}
+              </AppText>
+            </View>
           </View>
-          <TouchableOpacity
-            style={styles.avatar}
-            activeOpacity={0.85}
-            onPress={() => navigation.navigate('Profile')}
-          >
+          <TouchableOpacity style={styles.avatar} activeOpacity={0.85} onPress={() => navigation.navigate('Profile')}>
             <Ionicons name="person" size={22} color={colors.white} />
           </TouchableOpacity>
         </View>
-      </View>
 
-      {upcomingWithImages.length > 0 ? (
-        <View style={{ marginTop: spacing.lg }}>
-          <HighlightCarousel
-            programs={upcomingWithImages}
-            onPressItem={(program) => (navigation as any).navigate('ProgramDetail', { programId: program.id })}
-          />
-        </View>
-      ) : (
-        <View style={[styles.upcomingCard, { marginTop: spacing.lg }]}>
-          <AppText style={typography.caption}>{t('dashboard.noUpcoming')}</AppText>
-        </View>
-      )}
-
-      <AppText style={styles.sectionTitle}>{t('dashboard.exploreCategories')}</AppText>
-      <View style={styles.exploreGrid}>
-        {EXPLORE_CATEGORIES.map((cat) => (
+        <View style={styles.heroCardsRow}>
           <TouchableOpacity
-            key={cat}
-            style={[styles.exploreCard, { backgroundColor: categoryColors[cat] }]}
+            style={[styles.glassCard, styles.ringCard]}
             activeOpacity={0.85}
-            onPress={() => navigation.navigate('Programs', { category: cat })}
+            onPress={() => navigation.navigate('Payments')}
           >
-            <Ionicons
-              name={categoryIcons[cat]}
-              size={70}
-              color="rgba(255,255,255,0.16)"
-              style={styles.exploreWatermark}
-            />
-            <View style={styles.exploreIconWrap}>
-              <Ionicons name={categoryIcons[cat]} size={20} color={colors.white} />
+            <View style={styles.feeRingWrap}>
+              <Svg width={FEE_RING_SIZE} height={FEE_RING_SIZE} style={{ transform: [{ rotate: '-90deg' }] }}>
+                <Circle
+                  cx={FEE_RING_SIZE / 2}
+                  cy={FEE_RING_SIZE / 2}
+                  r={FEE_RING_RADIUS}
+                  stroke="rgba(255,255,255,0.22)"
+                  strokeWidth={FEE_RING_STROKE}
+                  fill="none"
+                />
+                <Circle
+                  cx={FEE_RING_SIZE / 2}
+                  cy={FEE_RING_SIZE / 2}
+                  r={FEE_RING_RADIUS}
+                  stroke="#FFFFFF"
+                  strokeWidth={FEE_RING_STROKE}
+                  fill="none"
+                  strokeDasharray={`${FEE_RING_CIRCUMFERENCE} ${FEE_RING_CIRCUMFERENCE}`}
+                  strokeDashoffset={FEE_RING_CIRCUMFERENCE * (1 - feePct / 100)}
+                  strokeLinecap="round"
+                />
+              </Svg>
+              <AppText style={styles.feeRingLabel}>{feePct}%</AppText>
             </View>
-            <AppText style={styles.exploreLabel}>{t(`category.${cat}`)}</AppText>
-            <AppText style={styles.exploreCount}>
-              {t('dashboard.categoryCount', { count: categoryCounts[cat] ?? 0 })}
-            </AppText>
+            <AppText style={styles.ringCaption}>{t('dashboard.feeStatusTitle')}</AppText>
           </TouchableOpacity>
-        ))}
-      </View>
 
-      <View style={styles.feeCard}>
-        <TouchableOpacity
-          style={styles.feeCardTop}
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate('Payments')}
-        >
-          <View style={styles.feeRingWrap}>
-            <Svg
-              width={FEE_RING_SIZE}
-              height={FEE_RING_SIZE}
-              style={{ transform: [{ rotate: '-90deg' }] }}
-            >
-              <Circle
-                cx={FEE_RING_SIZE / 2}
-                cy={FEE_RING_SIZE / 2}
-                r={FEE_RING_RADIUS}
-                stroke={colors.border}
-                strokeWidth={FEE_RING_STROKE}
-                fill="none"
-              />
-              <Circle
-                cx={FEE_RING_SIZE / 2}
-                cy={FEE_RING_SIZE / 2}
-                r={FEE_RING_RADIUS}
-                stroke={colors.primary}
-                strokeWidth={FEE_RING_STROKE}
-                fill="none"
-                strokeDasharray={`${FEE_RING_CIRCUMFERENCE} ${FEE_RING_CIRCUMFERENCE}`}
-                strokeDashoffset={FEE_RING_CIRCUMFERENCE * (1 - feePct / 100)}
-                strokeLinecap="round"
-              />
-            </Svg>
-            <AppText style={styles.feeRingLabel}>{feePct}%</AppText>
+          <View style={[styles.glassCard, styles.balanceCard]}>
+            <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Payments')}>
+              <View style={styles.balanceHeader}>
+                <AppText style={styles.balanceTitle}>{t('dashboard.balanceTitle')}</AppText>
+                <Ionicons name="chevron-forward" size={14} color="rgba(255,255,255,0.8)" />
+              </View>
+              {feeRemaining > 0 ? (
+                <AppText style={styles.balanceAmount} numberOfLines={1} adjustsFontSizeToFit>
+                  RM {feeRemaining.toFixed(2)}
+                </AppText>
+              ) : (
+                <View style={styles.settledRow}>
+                  <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                  <AppText style={styles.settledText}>{t('dashboard.feeSettledShort')}</AppText>
+                </View>
+              )}
+              <AppText style={styles.balanceSub} numberOfLines={2}>
+                {t('dashboard.feeProgress', { paid: paidTotal.toFixed(2), total: totalFeeAmount.toFixed(2) })}
+              </AppText>
+            </TouchableOpacity>
+            <View style={styles.balanceFooter}>
+              <TouchableOpacity
+                style={styles.breakdownToggle}
+                activeOpacity={0.7}
+                onPress={() => setFeeExpanded((v) => !v)}
+              >
+                <AppText style={styles.breakdownToggleText}>
+                  {t('dashboard.feeBreakdownShort')}
+                </AppText>
+                <Ionicons name={feeExpanded ? 'chevron-up' : 'chevron-down'} size={13} color="#FFFFFF" />
+              </TouchableOpacity>
+              {!isDependent && feeRemaining > 0 && (
+                <TouchableOpacity style={styles.payPill} activeOpacity={0.85} onPress={() => navigation.navigate('Payments')}>
+                  <AppText style={styles.payPillText}>{t('payments.payNow')}</AppText>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-          <View style={{ flex: 1, marginLeft: spacing.md }}>
-            <AppText style={styles.feeTitle}>{t('dashboard.feeStatusTitle')}</AppText>
-            <AppText style={styles.feeSummary}>
-              {t('dashboard.feeProgress', { paid: paidTotal.toFixed(2), total: totalFeeAmount.toFixed(2) })}
-            </AppText>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-        </TouchableOpacity>
-
-        <View style={styles.feeCardBottom}>
-          <AppText style={styles.feeStatusLabel}>
-            {feeRemaining > 0
-              ? t('dashboard.feeRemaining', { remaining: feeRemaining.toFixed(2) })
-              : t('dashboard.feeAllSettled')}
-          </AppText>
-          {!isDependent && feeRemaining > 0 && (
-            <Button
-              label={t('payments.payNow')}
-              onPress={() => navigation.navigate('Payments')}
-              style={styles.feeButton}
-            />
-          )}
         </View>
-
-        <TouchableOpacity
-          style={styles.feeToggleRow}
-          activeOpacity={0.7}
-          onPress={() => setFeeExpanded((v) => !v)}
-        >
-          <AppText style={styles.feeToggleText}>
-            {feeExpanded ? t('dashboard.feeHideBreakdown') : t('dashboard.feeBreakdown')}
-          </AppText>
-          <Ionicons
-            name={feeExpanded ? 'chevron-up' : 'chevron-down'}
-            size={14}
-            color={colors.primary}
-          />
-        </TouchableOpacity>
 
         {feeExpanded && (
-          <View style={styles.feeItemList}>
+          <View style={[styles.glassCard, styles.breakdownPanel]}>
             {feeItems.map((item) => {
               const itemPaid = paidByItem[item.id] ?? 0;
               const isPaid = itemPaid >= item.amount;
-              const badgeColor = isPaid ? '#1B7A43' : '#D9862E';
               return (
                 <View key={item.id} style={styles.feeItemRow}>
                   <Ionicons
                     name={isPaid ? 'checkmark-circle' : 'time-outline'}
                     size={16}
-                    color={badgeColor}
+                    color={isPaid ? '#8CF0B5' : '#FFD58A'}
                   />
                   <AppText style={styles.feeItemTitle} numberOfLines={1}>
                     {item.title}
                   </AppText>
-                  <View style={[styles.feeItemBadge, { backgroundColor: withAlpha(badgeColor, 0.12) }]}>
-                    <AppText style={[styles.feeItemBadgeText, { color: badgeColor }]}>
-                      {isPaid ? t('dashboard.feePaid') : t('dashboard.feeUnpaid')}
-                    </AppText>
-                  </View>
+                  <AppText style={[styles.feeItemStatus, { color: isPaid ? '#8CF0B5' : '#FFD58A' }]}>
+                    {isPaid ? t('dashboard.feePaid') : t('dashboard.feeUnpaid')}
+                  </AppText>
                 </View>
               );
             })}
           </View>
         )}
-      </View>
 
-      <View style={styles.statsCard}>
         <TouchableOpacity
-          style={styles.statTile}
-          activeOpacity={0.75}
-          onPress={() => navigation.navigate('Committee')}
+          style={[styles.glassCard, styles.notifPill]}
+          activeOpacity={0.85}
+          onPress={() => (navigation as any).navigate('Notifications')}
         >
-          <View style={[styles.statIconWrap, { backgroundColor: withAlpha('#2E6FD9', 0.12) }]}>
-            <Ionicons name="people" size={17} color="#2E6FD9" />
+          <View style={styles.notifPillIcon}>
+            <Ionicons name={latestNotification.icon} size={16} color={colors.white} />
           </View>
-          <AppText style={styles.statValue}>{residentCount ?? '—'}</AppText>
-          <AppText style={styles.statLabel}>{t('dashboard.statResidents')}</AppText>
-        </TouchableOpacity>
-        <View style={styles.statDivider} />
-        <TouchableOpacity
-          style={styles.statTile}
-          activeOpacity={0.75}
-          onPress={() => navigation.navigate('Programs')}
-        >
-          <View style={[styles.statIconWrap, { backgroundColor: withAlpha('#1B7A43', 0.12) }]}>
-            <Ionicons name="calendar" size={17} color="#1B7A43" />
+          <View style={{ flex: 1, marginLeft: spacing.sm }}>
+            <AppText style={styles.notifPillTitle} numberOfLines={1}>
+              {t(latestNotification.titleKey)}
+            </AppText>
+            <AppText style={styles.notifPillSub} numberOfLines={1}>
+              {t(latestNotification.bodyKey)}
+            </AppText>
           </View>
-          <AppText style={styles.statValue}>{upcoming.length}</AppText>
-          <AppText style={styles.statLabel}>{t('dashboard.statPrograms')}</AppText>
-        </TouchableOpacity>
-        <View style={styles.statDivider} />
-        <TouchableOpacity
-          style={styles.statTile}
-          activeOpacity={0.75}
-          onPress={() => navigation.navigate('Profile')}
-        >
-          <View style={[styles.statIconWrap, { backgroundColor: withAlpha('#D9862E', 0.12) }]}>
-            <Ionicons name="home" size={17} color="#D9862E" />
-          </View>
-          <AppText style={styles.statValue}>{(user?.familyMembers?.length ?? 0) + 1}</AppText>
-          <AppText style={styles.statLabel}>{t('dashboard.statFamily')}</AppText>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.sectionRow}>
-        <AppText style={styles.sectionTitle}>{t('dashboard.recentNotifications')}</AppText>
-        <AppText style={styles.linkText} onPress={() => (navigation as any).navigate('Notifications')}>
-          {t('dashboard.viewAll')}
-        </AppText>
-      </View>
-      <View style={styles.notifList}>
-        {recentNotifications.map((n) => (
-          <TouchableOpacity
-            key={n.id}
-            style={styles.notifCard}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate(n.target)}
-          >
-            <View style={[styles.notifIconWrap, { backgroundColor: withAlpha(n.color, 0.12) }]}>
-              <Ionicons name={n.icon} size={20} color={n.color} />
+          {unreadNotifications.length > 0 && (
+            <View style={styles.notifBadge}>
+              <AppText style={styles.notifBadgeText}>{t('dashboard.newCount', { count: unreadNotifications.length })}</AppText>
             </View>
-            <View style={{ flex: 1, marginLeft: spacing.md }}>
-              <View style={styles.notifTitleRow}>
-                <AppText style={styles.notifTitle} numberOfLines={1}>
-                  {t(n.titleKey)}
-                </AppText>
-                {n.unread && <View style={styles.notifDot} />}
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.quickRow}>
+          {quickActions.map((a) => (
+            <TouchableOpacity
+              key={a.key}
+              style={styles.quickItem}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate(a.route as never)}
+            >
+              <View style={styles.quickIcon}>
+                <Ionicons name={a.icon} size={22} color={colors.white} />
               </View>
-              <AppText style={styles.notifBody} numberOfLines={2}>
-                {t(n.bodyKey)}
+              <AppText style={styles.quickLabel} numberOfLines={1}>
+                {a.label}
               </AppText>
-              <AppText style={styles.notifTime}>{formatNotificationDate(n.hoursAgo, notifLocale)}</AppText>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
-        ))}
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
-      {committeePreview.length > 0 && (
-        <>
-          <View style={styles.sectionRow}>
-            <AppText style={styles.sectionTitle}>{t('committee.committeeSection')}</AppText>
-            <AppText style={styles.linkText} onPress={() => navigation.navigate('Committee')}>
-              {t('dashboard.viewAll')}
-            </AppText>
-          </View>
-          <View style={styles.committeeList}>
-            {committeePreview.map((member) => (
-              <TouchableOpacity
-                key={member.email}
-                style={styles.committeeCard}
-                activeOpacity={0.85}
-                onPress={() => navigation.navigate('Committee')}
-              >
-                <View style={styles.committeeAvatar}>
-                  <Ionicons name="person" size={18} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1, marginLeft: spacing.sm }}>
-                  <AppText style={styles.committeeName} numberOfLines={1}>
-                    {toTitleCase(member.name)}
-                  </AppText>
-                  <AppText style={styles.committeeRole}>{t(`role.${member.role}`)}</AppText>
-                </View>
-                <TouchableOpacity
-                  style={styles.committeeCallButton}
-                  activeOpacity={0.8}
-                  onPress={() => callNumber(member.phone)}
-                >
-                  <Ionicons name="call" size={16} color={colors.white} />
-                </TouchableOpacity>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </>
-      )}
+      <View style={styles.sheet}>
+        <View style={styles.sheetHandle} />
 
-      <AppText style={styles.sectionTitle}>{t('dashboard.emergencyContacts')}</AppText>
-      <View style={styles.emergencyRow}>
-        {emergencyPreview.map((c) => (
-          <TouchableOpacity
-            key={c.id}
-            style={styles.emergencyCard}
-            activeOpacity={0.85}
-            onPress={() => callNumber(c.phone)}
-          >
-            <View style={styles.emergencyIconWrap}>
-              <Ionicons name="call" size={16} color={colors.danger} />
+        <View style={styles.sectionRow}>
+          <AppText style={styles.sectionTitle}>{t('dashboard.upcomingPrograms')}</AppText>
+          <AppText style={styles.linkText} onPress={() => navigation.navigate('Programs')}>
+            {t('dashboard.viewAll')}
+          </AppText>
+        </View>
+        {upcomingWithImages.length > 0 ? (
+          <HighlightCarousel
+            programs={upcomingWithImages}
+            onPressItem={(program) => (navigation as any).navigate('ProgramDetail', { programId: program.id })}
+          />
+        ) : (
+          <View style={styles.emptyCard}>
+            <AppText style={typography.caption}>{t('dashboard.noUpcoming')}</AppText>
+          </View>
+        )}
+
+        <AppText style={styles.sectionTitleStandalone}>{t('dashboard.exploreCategories')}</AppText>
+        <View style={styles.exploreGrid}>
+          {EXPLORE_CATEGORIES.map((cat) => (
+            <TouchableOpacity
+              key={cat}
+              style={[
+                styles.exploreCard,
+                { backgroundColor: categoryColors[cat], shadowColor: categoryColors[cat], shadowOpacity: 0.38 },
+              ]}
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('Programs', { category: cat })}
+            >
+              <Ionicons
+                name={categoryIcons[cat]}
+                size={64}
+                color="rgba(255,255,255,0.16)"
+                style={styles.exploreWatermark}
+              />
+              <View style={styles.exploreIconWrap}>
+                <Ionicons name={categoryIcons[cat]} size={18} color={colors.white} />
+              </View>
+              <AppText style={styles.exploreLabel}>{t(`category.${cat}`)}</AppText>
+              <AppText style={styles.exploreCount}>
+                {t('dashboard.categoryCount', { count: categoryCounts[cat] ?? 0 })}
+              </AppText>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.statsRow}>
+          {stats.map((s) => (
+            <TouchableOpacity
+              key={s.key}
+              style={[styles.statCard, { backgroundColor: withAlpha(s.color, isDarkMode ? 0.22 : 0.12) }]}
+              activeOpacity={0.8}
+              onPress={s.onPress}
+            >
+              <View style={[styles.statIconWrap, { backgroundColor: s.color }]}>
+                <Ionicons name={s.icon} size={15} color="#FFFFFF" />
+              </View>
+              <AppText style={styles.statValue}>{s.value}</AppText>
+              <AppText style={styles.statLabel} numberOfLines={1}>
+                {s.label}
+              </AppText>
+              <View style={[styles.statTrack, { backgroundColor: withAlpha(s.color, 0.2) }]}>
+                <View style={[styles.statFill, { width: `${Math.max(s.pct, 6)}%`, backgroundColor: s.color }]} />
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {committeePreview.length > 0 && (
+          <>
+            <View style={styles.sectionRow}>
+              <AppText style={styles.sectionTitle}>{t('committee.committeeSection')}</AppText>
+              <AppText style={styles.linkText} onPress={() => navigation.navigate('Committee')}>
+                {t('dashboard.viewAll')}
+              </AppText>
             </View>
-            <AppText style={styles.emergencyRole} numberOfLines={1}>
-              {t(`emergencyContact.${c.id}Role`)}
-            </AppText>
-            <AppText style={styles.emergencyPhone}>{c.phone}</AppText>
-          </TouchableOpacity>
-        ))}
+            <View style={styles.listCard}>
+              {committeePreview.map((member, idx) => (
+                <TouchableOpacity
+                  key={member.email}
+                  style={[styles.committeeRow, idx > 0 && styles.rowDivider]}
+                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate('Committee')}
+                >
+                  <View style={styles.committeeAvatar}>
+                    <Ionicons name="person" size={16} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                    <AppText style={styles.committeeName} numberOfLines={1}>
+                      {toTitleCase(member.name)}
+                    </AppText>
+                    <AppText style={styles.committeeRole}>{t(`role.${member.role}`)}</AppText>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.committeeCallButton}
+                    activeOpacity={0.8}
+                    onPress={() => callNumber(member.phone)}
+                  >
+                    <Ionicons name="call" size={15} color={colors.white} />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
+
+        <AppText style={styles.sectionTitleStandalone}>{t('dashboard.emergencyContacts')}</AppText>
+        <View style={styles.emergencyRow}>
+          {emergencyPreview.map((c) => (
+            <TouchableOpacity
+              key={c.id}
+              style={styles.emergencyCard}
+              activeOpacity={0.85}
+              onPress={() => callNumber(c.phone)}
+            >
+              <View style={styles.emergencyIconWrap}>
+                <Ionicons name="call" size={15} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                <AppText style={styles.emergencyRole} numberOfLines={2}>
+                  {t(`emergencyContact.${c.id}Role`)}
+                </AppText>
+                <AppText style={styles.emergencyPhone}>{c.phone}</AppText>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
     </ScrollView>
   );
@@ -455,94 +506,121 @@ export default function DashboardScreen({ navigation }: Props) {
 
 const makeStyles = (colors: ColorPalette) =>
   StyleSheet.create({
-    headerBlock: {
-      backgroundColor: colors.primary,
-      borderBottomLeftRadius: radius.lg,
-      borderBottomRightRadius: radius.lg,
+    hero: {
+      backgroundColor: colors.primaryDark,
       overflow: 'hidden',
-      paddingBottom: spacing.lg,
+      paddingBottom: spacing.xl + spacing.sm,
     },
-    headerWatermark: {
+    glowLarge: {
       position: 'absolute',
-      right: -20,
-      top: -20,
+      width: 260,
+      height: 260,
+      borderRadius: 130,
+      right: -90,
+      top: -70,
+      backgroundColor: 'rgba(255,255,255,0.09)',
+    },
+    glowSmall: {
+      position: 'absolute',
+      width: 160,
+      height: 160,
+      borderRadius: 80,
+      left: -60,
+      bottom: 40,
+      backgroundColor: 'rgba(242,169,59,0.10)',
+    },
+    heroWatermark: {
+      position: 'absolute',
+      right: -24,
+      top: 60,
     },
     topBar: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingHorizontal: spacing.lg,
-      paddingTop: spacing.md,
+      paddingHorizontal: spacing.md,
     },
     topBarBrand: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.xs,
+      gap: spacing.xs + 2,
     },
     topBarLogo: {
-      width: 26,
-      height: 26,
-      borderRadius: 13,
-      backgroundColor: 'rgba(255,255,255,0.2)',
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: 'rgba(255,255,255,0.22)',
       alignItems: 'center',
       justifyContent: 'center',
     },
     topBarTitle: {
       fontSize: 13,
-      fontWeight: '700',
+      fontWeight: '800',
       color: colors.white,
-      letterSpacing: 0.5,
+      letterSpacing: 0.8,
     },
     topBarActions: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.sm,
     },
-    iconButton: {
+    glassIconButton: {
       width: 38,
       height: 38,
       borderRadius: 19,
-      backgroundColor: colors.surface,
+      backgroundColor: 'rgba(255,255,255,0.16)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.25)',
       alignItems: 'center',
       justifyContent: 'center',
-      ...shadow.card,
+      ...shadow.glass,
+      shadowOpacity: 0.22,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 5 },
     },
     notificationDot: {
       position: 'absolute',
       top: 8,
       right: 9,
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: colors.danger,
+      width: 9,
+      height: 9,
+      borderRadius: 5,
+      backgroundColor: '#FF5A5F',
       borderWidth: 1.5,
-      borderColor: colors.surface,
+      borderColor: '#14532D',
     },
-    header: {
+    greetingRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingHorizontal: spacing.lg,
-      paddingTop: spacing.md,
+      paddingHorizontal: spacing.md,
+      marginTop: spacing.md,
     },
-    headerTextWrap: {
+    greetingTextWrap: {
       flex: 1,
       minWidth: 0,
       marginRight: spacing.md,
     },
     greetingCaption: {
-      fontSize: 13,
-      color: colors.primaryLight,
+      fontSize: 12.5,
+      color: 'rgba(255,255,255,0.8)',
     },
     greetingName: {
       fontSize: 22,
-      fontWeight: '700',
+      fontWeight: '800',
       color: colors.white,
+      marginTop: 1,
+    },
+    parkRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginTop: 3,
     },
     greetingSubtitle: {
-      fontSize: 13,
-      color: colors.primaryLight,
-      marginTop: 2,
+      fontSize: 12.5,
+      color: 'rgba(255,255,255,0.85)',
+      flexShrink: 1,
     },
     avatar: {
       width: 46,
@@ -552,39 +630,29 @@ const makeStyles = (colors: ColorPalette) =>
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 2,
-      borderColor: 'rgba(255,255,255,0.4)',
+      borderColor: 'rgba(255,255,255,0.45)',
+      ...shadow.glass,
+      shadowOpacity: 0.28,
+      shadowRadius: 12,
     },
-    sectionTitle: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: colors.text,
-      marginHorizontal: spacing.lg,
-      marginTop: spacing.lg,
-      marginBottom: spacing.sm,
-    },
-    sectionRow: {
+    heroCardsRow: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
+      gap: spacing.sm + 2,
+      paddingHorizontal: spacing.md,
+      marginTop: spacing.md,
+    },
+    glassCard: {
+      backgroundColor: 'rgba(255,255,255,0.14)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.26)',
+      borderRadius: radius.lg,
+      ...shadow.glass,
+    },
+    ringCard: {
+      width: 112,
       alignItems: 'center',
-      marginHorizontal: spacing.lg,
-      marginTop: spacing.lg,
-    },
-    linkText: {
-      color: colors.primary,
-      fontWeight: '600',
-      fontSize: 13,
-    },
-    feeCard: {
-      backgroundColor: colors.surface,
-      marginHorizontal: spacing.lg,
-      marginTop: spacing.lg,
-      borderRadius: radius.md,
-      padding: spacing.md,
-      ...shadow.card,
-    },
-    feeCardTop: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: spacing.md - 2,
     },
     feeRingWrap: {
       width: FEE_RING_SIZE,
@@ -594,228 +662,330 @@ const makeStyles = (colors: ColorPalette) =>
     },
     feeRingLabel: {
       position: 'absolute',
-      fontSize: 13,
-      fontWeight: '700',
-      color: colors.text,
+      fontSize: 18,
+      fontWeight: '800',
+      color: colors.white,
     },
-    statsCard: {
-      flexDirection: 'row',
-      alignItems: 'stretch',
-      backgroundColor: colors.surface,
-      marginHorizontal: spacing.lg,
+    ringCaption: {
+      fontSize: 11.5,
+      fontWeight: '700',
+      color: 'rgba(255,255,255,0.9)',
       marginTop: spacing.sm,
-      borderRadius: radius.md,
-      paddingVertical: spacing.md,
-      ...shadow.card,
     },
-    statTile: {
+    balanceCard: {
       flex: 1,
-      alignItems: 'center',
-      gap: 2,
+      padding: spacing.md - 2,
+      justifyContent: 'space-between',
     },
-    statIconWrap: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 4,
-    },
-    statValue: {
-      fontSize: 17,
-      fontWeight: '700',
-      color: colors.text,
-    },
-    statLabel: {
-      fontSize: 11,
-      color: colors.textMuted,
-    },
-    statDivider: {
-      width: 1,
-      backgroundColor: colors.border,
-      marginVertical: 2,
-    },
-    feeTitle: {
-      fontSize: 15,
-      fontWeight: '700',
-      color: colors.text,
-    },
-    feeSummary: {
-      fontSize: 12,
-      color: colors.textMuted,
-      marginTop: 2,
-    },
-    feeCardBottom: {
+    balanceHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginTop: spacing.md,
     },
-    feeStatusLabel: {
-      flex: 1,
+    balanceTitle: {
       fontSize: 12,
-      color: colors.textMuted,
+      fontWeight: '700',
+      color: 'rgba(255,255,255,0.85)',
     },
-    feeButton: {
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.sm,
+    balanceAmount: {
+      fontSize: 25,
+      fontWeight: '800',
+      color: colors.white,
+      marginTop: 2,
     },
-    feeToggleRow: {
+    settledRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-      gap: 4,
-      marginTop: spacing.md,
-      paddingTop: spacing.sm,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
+      gap: 6,
+      marginTop: 4,
     },
-    feeToggleText: {
-      fontSize: 12.5,
-      fontWeight: '600',
-      color: colors.primary,
+    settledText: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: colors.white,
     },
-    feeItemList: {
+    balanceSub: {
+      fontSize: 11,
+      lineHeight: 15,
+      color: 'rgba(255,255,255,0.75)',
+      marginTop: 2,
+    },
+    balanceFooter: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
       marginTop: spacing.sm,
-      gap: spacing.xs,
+    },
+    breakdownToggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+    },
+    breakdownToggleText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.white,
+    },
+    payPill: {
+      backgroundColor: colors.white,
+      borderRadius: radius.full,
+      paddingHorizontal: spacing.sm + 2,
+      paddingVertical: 6,
+      marginLeft: spacing.sm,
+      ...shadow.glass,
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 4 },
+    },
+    payPillText: {
+      fontSize: 11.5,
+      fontWeight: '800',
+      color: '#12522D',
+    },
+    breakdownPanel: {
+      marginHorizontal: spacing.md,
+      marginTop: spacing.sm + 2,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
     },
     feeItemRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.sm,
-      paddingVertical: 6,
+      paddingVertical: 5,
     },
     feeItemTitle: {
       flex: 1,
       fontSize: 12.5,
-      color: colors.text,
+      color: colors.white,
     },
-    feeItemBadge: {
-      borderRadius: radius.sm,
+    feeItemStatus: {
+      fontSize: 11.5,
+      fontWeight: '800',
+    },
+    notifPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginHorizontal: spacing.md,
+      marginTop: spacing.sm + 2,
+      paddingVertical: spacing.sm + 2,
+      paddingHorizontal: spacing.md - 2,
+      borderRadius: radius.full,
+    },
+    notifPillIcon: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: 'rgba(255,255,255,0.22)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    notifPillTitle: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: colors.white,
+    },
+    notifPillSub: {
+      fontSize: 11.5,
+      color: 'rgba(255,255,255,0.8)',
+      marginTop: 1,
+    },
+    notifBadge: {
+      backgroundColor: '#FF5A5F',
+      borderRadius: radius.full,
       paddingHorizontal: spacing.sm,
       paddingVertical: 3,
+      marginLeft: spacing.sm,
     },
-    feeItemBadgeText: {
+    notifBadgeText: {
+      fontSize: 10.5,
+      fontWeight: '800',
+      color: colors.white,
+    },
+    quickRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.md,
+      marginTop: spacing.md,
+    },
+    quickItem: {
+      flex: 1,
+      alignItems: 'center',
+      gap: 6,
+    },
+    quickIcon: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: 'rgba(255,255,255,0.16)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.28)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      ...shadow.glass,
+      shadowOpacity: 0.26,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 7 },
+    },
+    quickLabel: {
       fontSize: 11,
       fontWeight: '700',
+      color: colors.white,
+    },
+    sheet: {
+      backgroundColor: colors.background,
+      marginTop: -spacing.lg,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      paddingTop: spacing.sm,
+      ...shadow.sheet,
+    },
+    sheetHandle: {
+      alignSelf: 'center',
+      width: 38,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.border,
+      marginBottom: spacing.xs,
+    },
+    sectionRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginHorizontal: spacing.md,
+      marginTop: spacing.md - 2,
+      marginBottom: spacing.sm,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: colors.text,
+    },
+    sectionTitleStandalone: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: colors.text,
+      marginHorizontal: spacing.md,
+      marginTop: spacing.md - 2,
+      marginBottom: spacing.sm,
+    },
+    linkText: {
+      color: colors.primary,
+      fontWeight: '700',
+      fontSize: 13,
+    },
+    emptyCard: {
+      backgroundColor: colors.surface,
+      marginHorizontal: spacing.md,
+      borderRadius: radius.md,
+      padding: spacing.md,
+      ...shadow.card,
     },
     exploreGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       justifyContent: 'space-between',
-      marginHorizontal: spacing.lg,
-      rowGap: spacing.sm,
+      marginHorizontal: spacing.md,
+      rowGap: spacing.sm + 2,
     },
     exploreCard: {
-      width: '48%',
-      height: 130,
+      width: '48.5%',
+      height: 104,
       borderRadius: radius.lg,
-      padding: spacing.md,
+      padding: spacing.md - 2,
       overflow: 'hidden',
       justifyContent: 'flex-end',
       ...shadow.card,
+      shadowRadius: 16,
     },
     exploreWatermark: {
       position: 'absolute',
-      right: -14,
-      top: -12,
+      right: -12,
+      top: -10,
     },
     exploreIconWrap: {
       position: 'absolute',
-      top: spacing.md,
-      left: spacing.md,
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      top: spacing.md - 2,
+      left: spacing.md - 2,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
       backgroundColor: 'rgba(255,255,255,0.25)',
       alignItems: 'center',
       justifyContent: 'center',
     },
     exploreLabel: {
-      fontSize: 15,
-      fontWeight: '700',
+      fontSize: 14.5,
+      fontWeight: '800',
       color: colors.white,
     },
     exploreCount: {
       fontSize: 11.5,
       fontWeight: '600',
       color: 'rgba(255,255,255,0.9)',
-      marginTop: 2,
+      marginTop: 1,
     },
-    upcomingCard: {
+    statsRow: {
       flexDirection: 'row',
-      backgroundColor: colors.surface,
-      marginHorizontal: spacing.lg,
+      gap: spacing.sm + 2,
+      marginHorizontal: spacing.md,
+      marginTop: spacing.md - 2,
+    },
+    statCard: {
+      flex: 1,
       borderRadius: radius.md,
-      padding: spacing.md,
-      alignItems: 'center',
-      gap: spacing.md,
+      padding: spacing.md - 2,
       ...shadow.card,
     },
-    notifList: {
-      marginHorizontal: spacing.lg,
-      gap: spacing.sm,
-    },
-    notifCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: colors.surface,
-      borderRadius: radius.md,
-      padding: spacing.md,
-      ...shadow.card,
-    },
-    notifIconWrap: {
-      width: 42,
-      height: 42,
-      borderRadius: 21,
+    statIconWrap: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    notifTitleRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-    },
-    notifTitle: {
-      flexShrink: 1,
-      fontSize: 14,
-      fontWeight: '700',
+    statValue: {
+      fontSize: 20,
+      fontWeight: '800',
       color: colors.text,
+      marginTop: spacing.sm,
     },
-    notifDot: {
-      width: 7,
-      height: 7,
-      borderRadius: 3.5,
-      backgroundColor: colors.danger,
-    },
-    notifBody: {
-      fontSize: 12.5,
-      lineHeight: 17,
+    statLabel: {
+      fontSize: 11.5,
       color: colors.textMuted,
-      marginTop: 2,
+      marginTop: 1,
     },
-    notifTime: {
-      fontSize: 11,
-      color: colors.textMuted,
-      marginTop: 4,
+    statTrack: {
+      height: 4,
+      borderRadius: 2,
+      marginTop: spacing.sm,
+      overflow: 'hidden',
     },
-    committeeList: {
-      marginHorizontal: spacing.lg,
-      gap: spacing.sm,
+    statFill: {
+      height: '100%',
+      borderRadius: 2,
     },
-    committeeCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
+    listCard: {
       backgroundColor: colors.surface,
+      marginHorizontal: spacing.md,
       borderRadius: radius.md,
-      padding: spacing.sm,
+      paddingHorizontal: spacing.md - 2,
       ...shadow.card,
     },
+    rowDivider: {
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    committeeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: spacing.sm + 2,
+    },
     committeeAvatar: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: withAlpha(colors.primary, 0.12),
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: withAlpha(colors.primary, 0.14),
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -830,42 +1000,45 @@ const makeStyles = (colors: ColorPalette) =>
       marginTop: 1,
     },
     committeeCallButton: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
     },
     emergencyRow: {
       flexDirection: 'row',
-      paddingHorizontal: spacing.lg,
-      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      gap: spacing.sm + 2,
     },
     emergencyCard: {
       flex: 1,
-      backgroundColor: colors.surface,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: withAlpha('#D64545', 0.12),
       borderRadius: radius.md,
-      padding: spacing.md,
+      padding: spacing.md - 2,
       ...shadow.card,
+      shadowColor: '#D64545',
+      shadowOpacity: 0.18,
     },
     emergencyIconWrap: {
-      width: 30,
-      height: 30,
-      borderRadius: 15,
-      backgroundColor: withAlpha('#D64545', 0.12),
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: '#D64545',
       alignItems: 'center',
       justifyContent: 'center',
     },
     emergencyRole: {
       fontSize: 12,
       color: colors.textMuted,
-      marginTop: spacing.sm,
     },
     emergencyPhone: {
       fontSize: 15,
-      fontWeight: '700',
+      fontWeight: '800',
       color: colors.text,
-      marginTop: 2,
+      marginTop: 1,
     },
   });

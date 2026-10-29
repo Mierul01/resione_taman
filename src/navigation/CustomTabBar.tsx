@@ -9,6 +9,10 @@ import { useLanguage } from '../context/LanguageContext';
 import type { MainTabParamList } from './types';
 import AppText from '../components/AppText';
 
+const TAB_BAR_BG = '#0E1411';
+const TAB_ACTIVE = '#4CCB85';
+const TAB_INACTIVE = '#8A9690';
+
 const PRIMARY_ROUTE_NAMES: (keyof MainTabParamList)[] = ['Dashboard', 'Payments', 'Committee', 'Profile'];
 
 const icons: Record<keyof MainTabParamList, keyof typeof Ionicons.glyphMap> = {
@@ -65,9 +69,9 @@ export default function CustomTabBar({ state, navigation, insets }: BottomTabBar
                 <Ionicons
                   name={focused ? icons[route.name] : (`${icons[route.name]}-outline` as keyof typeof Ionicons.glyphMap)}
                   size={22}
-                  color={focused ? colors.primary : colors.textMuted}
+                  color={focused ? TAB_ACTIVE : TAB_INACTIVE}
                 />
-                <AppText style={[styles.tabLabel, { color: focused ? colors.primary : colors.textMuted }]} numberOfLines={1}>
+                <AppText style={[styles.tabLabel, { color: focused ? TAB_ACTIVE : TAB_INACTIVE }]} numberOfLines={1}>
                   {t(labelKeys[route.name])}
                 </AppText>
               </TouchableOpacity>
@@ -84,7 +88,7 @@ export default function CustomTabBar({ state, navigation, insets }: BottomTabBar
                     style={[
                       styles.tabLabel,
                       styles.centerLabel,
-                      { color: moreOpen || isOverflowFocused ? colors.primary : colors.textMuted },
+                      { color: moreOpen || isOverflowFocused ? TAB_ACTIVE : TAB_INACTIVE },
                     ]}
                     numberOfLines={1}
                   >
@@ -114,7 +118,7 @@ export default function CustomTabBar({ state, navigation, insets }: BottomTabBar
                   onPress={() => goTo(route.name)}
                 >
                   <View style={[styles.sheetIconWrap, focused && { backgroundColor: withAlpha(colors.primary, 0.15) }]}>
-                    <Ionicons name={icons[route.name]} size={20} color={focused ? colors.primary : colors.text} />
+                    <Ionicons name={icons[route.name]} size={20} color={colors.primary} />
                   </View>
                   <AppText style={styles.sheetItemLabel}>{t(labelKeys[route.name])}</AppText>
                   <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -135,10 +139,11 @@ const makeStyles = (colors: ColorPalette) =>
       alignItems: 'flex-start',
       paddingTop: spacing.sm,
       paddingHorizontal: spacing.xs,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-      backgroundColor: colors.surface,
+      backgroundColor: TAB_BAR_BG,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
       overflow: 'visible',
+      ...shadow.sheet,
     },
     tabItem: {
       flex: 1,
@@ -159,15 +164,15 @@ const makeStyles = (colors: ColorPalette) =>
       width: 50,
       height: 50,
       borderRadius: 25,
-      backgroundColor: colors.primary,
+      backgroundColor: '#1F9A55',
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 3,
-      borderColor: colors.surface,
+      borderColor: TAB_BAR_BG,
       ...shadow.card,
     },
     centerButtonActive: {
-      backgroundColor: colors.primaryDark,
+      backgroundColor: '#2FBF6E',
     },
     centerLabel: {
       marginTop: 6,
@@ -179,9 +184,10 @@ const makeStyles = (colors: ColorPalette) =>
     },
     sheet: {
       backgroundColor: colors.surface,
-      borderTopLeftRadius: radius.lg,
-      borderTopRightRadius: radius.lg,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
       paddingTop: spacing.sm,
+      ...shadow.sheet,
       paddingHorizontal: spacing.lg,
     },
     sheetHandle: {
@@ -210,7 +216,7 @@ const makeStyles = (colors: ColorPalette) =>
       borderRadius: 20,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.background,
+      backgroundColor: withAlpha(colors.primary, 0.12),
     },
     sheetItemLabel: {
       flex: 1,

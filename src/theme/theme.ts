@@ -48,13 +48,40 @@ export const radius = {
 
 export const shadow = {
   card: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowColor: '#0B3D22',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    elevation: 6,
+  },
+  // Floating elements on top of the green hero (no elevation: Android draws
+  // it as a grey slab behind translucent glass cards).
+  glass: {
+    shadowColor: '#031A0D',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5,
+    shadowRadius: 22,
+  },
+  // Header / hero blocks that cast onto the page below.
+  hero: {
+    shadowColor: '#031A0D',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.3,
+    shadowRadius: 22,
+    elevation: 12,
+  },
+  // Sheets and bars that cast upward onto the content behind them.
+  sheet: {
+    shadowColor: '#031A0D',
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    elevation: 16,
   },
 };
+
+export const heroGradientLight = ['#0E5A31', '#1B7A43', '#2FA463'];
+export const heroGradientDark = ['#071C11', '#0F3D24', '#1B7A43'];
 
 export function withAlpha(hex: string, alpha: number) {
   const clean = hex.replace('#', '');

@@ -18,14 +18,25 @@ import AppText from '../components/AppText';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 
-export default function RegisterScreen({ navigation }: Props) {
+export default function RegisterScreen({ navigation, route }: Props) {
   const colors = useThemeColors();
   const { isDarkMode } = useAppTheme();
   const { t } = useLanguage();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { register, checkHousehold } = useAuth();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const { register, checkHousehold, logout } = useAuth();
+  const google = route.params?.google;
+  const [name, setName] = useState(google?.name ?? '');
+  const [email, setEmail] = useState(google?.email ?? '');
+
+  // A Google visitor who leaves without finishing would otherwise stay
+  // signed in to Firebase with no profile, so sign them out on the way out.
+  const registeredRef = useRef(false);
+  useEffect(() => {
+    if (!google) return;
+    return () => {
+      if (!registeredRef.current) logout().catch(() => {});
+    };
+  }, []);
   const [phone, setPhone] = useState('');
   const [parkPickerVisible, setParkPickerVisible] = useState(false);
   const [selectedPark, setSelectedPark] = useState<ParkSelection | null>(null);
@@ -86,7 +97,7 @@ export default function RegisterScreen({ navigation }: Props) {
       !state ||
       !district ||
       !city.trim() ||
-      !password
+      (!google && !password)
     ) {
       setError(t('common.required'));
       return;
@@ -95,11 +106,11 @@ export default function RegisterScreen({ navigation }: Props) {
       setError(t('register.houseTaken', { owner: houseCheck.ownerName ?? '' }));
       return;
     }
-    if (password.length < 6) {
+    if (!google && password.length < 6) {
       setError(t('register.passwordTooShort'));
       return;
     }
-    if (password !== confirmPassword) {
+    if (!google && password !== confirmPassword) {
       setError(t('register.passwordMismatch'));
       return;
     }
@@ -120,7 +131,9 @@ export default function RegisterScreen({ navigation }: Props) {
       district,
       city,
       password,
+      viaGoogle: !!google,
     });
+    if (result.success) registeredRef.current = true;
     setLoading(false);
     if (!result.success) {
       setError(
@@ -146,13 +159,21 @@ export default function RegisterScreen({ navigation }: Props) {
         <View style={styles.card}>
           <View style={styles.cardHandle} />
           <ScrollView contentContainerStyle={styles.cardContent} keyboardShouldPersistTaps="handled">
-            <AppText style={styles.title}>{t('register.title')}</AppText>
+            <AppText style={styles.title}>{t(google ? 'register.googleTitle' : 'register.title')}</AppText>
             <AppText style={styles.subtitle}>
               {t('register.subtitle', { appName: t('common.appName') })}
             </AppText>
+            {google && (
+              <View style={styles.googleBanner}>
+                <Ionicons name="logo-google" size={15} color={colors.primary} />
+                <AppText style={styles.googleBannerText}>{t('register.googleBanner', { email: google.email })}</AppText>
+              </View>
+            )}
 
             <Field label={t('register.fullName')} icon="person-outline" value={name} onChangeText={setName} placeholder={t('register.fullNamePlaceholder')} />
-            <Field label={t('common.email')} icon="mail-outline" value={email} onChangeText={setEmail} placeholder={t('register.emailPlaceholder')} keyboardType="email-address" autoCapitalize="none" />
+            {!google && (
+              <Field label={t('common.email')} icon="mail-outline" value={email} onChangeText={setEmail} placeholder={t('register.emailPlaceholder')} keyboardType="email-address" autoCapitalize="none" />
+            )}
             <Field label={t('common.phone')} icon="call-outline" value={phone} onChangeText={setPhone} placeholder={t('register.phonePlaceholder')} keyboardType="phone-pad" />
             <AppText style={styles.fieldLabel}>{t('register.parkName')}</AppText>
             <TouchableOpacity
@@ -257,10 +278,14 @@ export default function RegisterScreen({ navigation }: Props) {
               placeholder={t('register.cityPlaceholder')}
               onSelect={setCity}
             />
-            <Field label={t('register.password')} icon="lock-closed-outline" value={password} onChangeText={setPassword} placeholder={t('register.passwordPlaceholder')} secureTextEntry />
-            <PasswordStrengthChecklist password={password} />
-            <Field label={t('register.confirmPassword')} icon="lock-closed-outline" value={confirmPassword} onChangeText={setConfirmPassword} placeholder={t('register.confirmPasswordPlaceholder')} secureTextEntry />
-            <PasswordMatchIndicator password={password} confirmPassword={confirmPassword} />
+            {!google && (
+              <>
+                <Field label={t('register.password')} icon="lock-closed-outline" value={password} onChangeText={setPassword} placeholder={t('register.passwordPlaceholder')} secureTextEntry />
+                <PasswordStrengthChecklist password={password} />
+                <Field label={t('register.confirmPassword')} icon="lock-closed-outline" value={confirmPassword} onChangeText={setConfirmPassword} placeholder={t('register.confirmPasswordPlaceholder')} secureTextEntry />
+                <PasswordMatchIndicator password={password} confirmPassword={confirmPassword} />
+              </>
+            )}
 
             <TouchableOpacity style={styles.pdpaRow} activeOpacity={0.75} onPress={() => setPdpaConsent((v) => !v)}>
               <Ionicons name={pdpaConsent ? 'checkbox' : 'square-outline'} size={20} color={colors.primary} />
@@ -444,6 +469,22 @@ const makeStyles = (colors: ColorPalette) =>
     row: {
       flexDirection: 'row',
       gap: spacing.sm,
+    },
+    googleBanner: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+      backgroundColor: withAlpha(colors.primary, 0.1),
+      borderRadius: radius.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      marginTop: spacing.xs,
+    },
+    googleBannerText: {
+      flex: 1,
+      fontSize: 12,
+      lineHeight: 17,
+      color: colors.text,
     },
     parkHint: {
       fontSize: 11,

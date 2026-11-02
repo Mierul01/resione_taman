@@ -3,7 +3,8 @@ import type { Program } from '../data/mockData';
 
 export type RootStackParamList = {
   Login: undefined;
-  Register: undefined;
+  // google: set when coming from "Continue with Google" for a new account.
+  Register: { google?: { name: string; email: string } } | undefined;
   PdpaNotice: undefined;
   Main: NavigatorScreenParams<MainTabParamList>;
   ProgramDetail: { programId: string };

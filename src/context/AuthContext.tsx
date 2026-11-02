@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
   onAuthStateChanged,
   setPersistence,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut,
   updatePassword as firebaseUpdatePassword,
   deleteUser,
@@ -78,6 +80,9 @@ export type RegisterData = Omit<
   'familyMembers' | 'role' | 'parkId' | 'parkName' | 'houseNo' | 'isHouseholdOwner'
 > & {
   password: string;
+  // Set when the visitor already signed in with Google and is only filling
+  // in their profile, so no email/password account is created.
+  viaGoogle?: boolean;
   houseNo: string;
   // Either an existing park the visitor searched for and picked, or the
   // details of a brand-new one to create (created at submit time, once an
@@ -87,6 +92,16 @@ export type RegisterData = Omit<
 
 export type RegisterResult = { success: boolean; messageKey?: string; ownerName?: string };
 
+// needsProfile: Google account is signed in but has no ResiOne profile yet,
+// so the visitor still has to pick a park and house before getting in.
+export type GoogleSignInResult = {
+  success: boolean;
+  messageKey?: string;
+  needsProfile?: boolean;
+  name?: string;
+  email?: string;
+};
+
 type AuthContextType = {
   user: User | null;
   isLoading: boolean;
@@ -95,6 +110,7 @@ type AuthContextType = {
     password: string,
     rememberMe?: boolean
   ) => Promise<{ success: boolean; messageKey?: string }>;
+  signInWithGoogle: (rememberMe?: boolean) => Promise<GoogleSignInResult>;
   register: (data: RegisterData) => Promise<RegisterResult>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -217,6 +233,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const signInWithGoogle = async (rememberMe = true): Promise<GoogleSignInResult> => {
+    try {
+      await setPersistence(auth, rememberMe ? rememberMePersistence : sessionOnlyPersistence);
+      const cred = await signInWithPopup(auth, new GoogleAuthProvider());
+      const snap = await getDoc(doc(db, 'users', cred.user.uid));
+      if (!snap.exists()) {
+        return {
+          success: true,
+          needsProfile: true,
+          name: cred.user.displayName ?? '',
+          email: cred.user.email ?? '',
+        };
+      }
+      setUser(normalize(snap.data()));
+      return { success: true };
+    } catch (err: any) {
+      const code = err?.code ?? '';
+      // Closing the Google window is a normal "never mind", not an error.
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        return { success: false };
+      }
+      console.error('google sign-in failed:', code || err);
+      if (code === 'auth/popup-blocked') return { success: false, messageKey: 'login.googlePopupBlocked' };
+      if (code === 'auth/operation-not-allowed' || code === 'auth/unauthorized-domain') {
+        return { success: false, messageKey: 'login.googleUnavailable' };
+      }
+      return { success: false, messageKey: 'common.loginFailed' };
+    }
+  };
+
   const register = async (data: RegisterData): Promise<RegisterResult> => {
     // A house in an existing park can already be claimed by someone else —
     // check before creating any auth account so a doomed registration never
@@ -230,12 +276,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     let cred: any;
+    let emailTrimmed = data.email.trim();
     try {
-      // A previous login with "remember me" unchecked leaves the auth
-      // instance in session-only mode; new accounts should always persist.
-      await setPersistence(auth, rememberMePersistence);
-      const emailTrimmed = data.email.trim();
-      cred = await createUserWithEmailAndPassword(auth, emailTrimmed, data.password);
+      if (data.viaGoogle) {
+        if (!auth.currentUser?.email) return { success: false, messageKey: 'register.failed' };
+        emailTrimmed = auth.currentUser.email;
+      } else {
+        // A previous login with "remember me" unchecked leaves the auth
+        // instance in session-only mode; new accounts should always persist.
+        await setPersistence(auth, rememberMePersistence);
+        cred = await createUserWithEmailAndPassword(auth, emailTrimmed, data.password);
+      }
+      const uid = data.viaGoogle ? auth.currentUser!.uid : cred.user.uid;
 
       const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(emailTrimmed.toLowerCase());
       let park: Park;
@@ -279,7 +331,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       };
 
       const houseRef = doc(db, 'households', householdDocId(park.id, houseNo));
-      const userRef = doc(db, 'users', cred.user.uid);
+      const userRef = doc(db, 'users', uid);
       await runTransaction(db, async (tx) => {
         const houseSnap = await tx.get(houseRef);
         if (houseSnap.exists()) {
@@ -458,6 +510,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       user,
       isLoading,
       login,
+      signInWithGoogle,
       register,
       logout,
       deleteAccount,
